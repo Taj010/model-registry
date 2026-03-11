@@ -1,6 +1,8 @@
 from __future__ import annotations
+import base64
 import json
 import logging
+import os
 import configargparse as cap
 from typing import Any, Dict
 from pathlib import Path
@@ -106,6 +108,10 @@ def _parser() -> cap.ArgumentParser:
     p.add_argument("--registry-custom-ca", default=None)
     p.add_argument("--registry-custom-ca-envvar", default=None)
     p.add_argument("--registry-log-level", default=logging.WARNING)
+
+    # --- signing ---
+    p.add_argument("--sign", default=None, type=str2bool)
+    p.add_argument("--signing-identity-token-path", default=None)
 
     # --- ConfigMap metadata ---
     p.add_argument("--metadata-configmap-path", default=None, help="Path to mounted ConfigMap with model metadata")
@@ -220,6 +226,9 @@ def _load_oci_credentials(
         // ...
     }
     ```
+
+    The auth field should be base64-encoded per Docker spec, but this function
+    also handles plain text for backwards compatibility.
     """
     logger.info(f"🔍 Loading OCI credentials from {path}")
     # Validate the path is a file
@@ -237,11 +246,36 @@ def _load_oci_credentials(
     # Load the credentials from the docker config, the URI passed in via config is used as a key to find the correct credentials
     registry = store.registry
     auth = docker_config["auths"][registry]["auth"]
-    # TODO: This might not be the correct way to parse this
-    username, password = auth.split(":") if auth else (None, None)
+
+    if auth:
+        # Try to decode as base64 first (Docker spec)
+        try:
+            decoded_auth = base64.b64decode(auth).decode("utf-8")
+            # Verify it looks like username:password format
+            if ":" in decoded_auth:
+                username, password = decoded_auth.split(":", 1)
+            else:
+                # If no colon after decode, fall back to plain text
+                raise ValueError("Decoded auth doesn't contain colon")
+        except Exception:
+            # If base64 decode fails or decoded value is invalid,
+            # try treating it as plain text (backwards compatibility)
+            if ":" in auth:
+                username, password = auth.split(":", 1)
+                logger.warning(
+                    "Detected plain text credentials in .dockerconfigjson auth field. "
+                    "This format is DEPRECATED. Please use base64-encoded 'username:password' "
+                    "per Docker specification."
+                )
+            else:
+                # Auth field exists but is malformed
+                username, password = None, None
+    else:
+        username, password = None, None
+
     store.username = username
     store.password = password
-    store.email = docker_config["auths"][registry]["email"]
+    store.email = docker_config["auths"][registry].get("email")
 
 
 def _load_uri_credentials(path: str | Path, store: URISourceConfig) -> None:
@@ -342,6 +376,35 @@ def str2bool(x):
     if val in ("no", "n", "false", "f", "0"):
         return False
     raise ValueError(f"Invalid boolean value: {x!r}")
+
+
+_SIGSTORE_ENV_VARS = ("SIGSTORE_TUF_URL", "SIGSTORE_FULCIO_URL", "SIGSTORE_REKOR_URL")
+
+
+def _resolve_signing(sign_flag: bool | None) -> bool:
+    """Resolve whether signing should be enabled.
+
+    If the --sign flag is explicitly set, use that value.
+    Otherwise, auto-detect from SIGSTORE environment variables:
+    - All set and non-empty → enabled
+    - None set → disabled silently
+    - Partial or empty → disabled with a warning
+    """
+    if sign_flag is not None:
+        logger.info("Signing explicitly %s.", "enabled" if sign_flag else "disabled")
+        return sign_flag
+
+    configured = {var for var in _SIGSTORE_ENV_VARS if os.environ.get(var)}
+    if configured == set(_SIGSTORE_ENV_VARS):
+        logger.info("Signing enabled, all SIGSTORE env vars are set.")
+        return True
+    if not configured:
+        logger.info("Signing disabled, no SIGSTORE env vars are set.")
+        return False
+
+    missing = sorted(set(_SIGSTORE_ENV_VARS) - configured)
+    logger.warning("Signing disabled, incomplete SIGSTORE configuration, missing: %s.", ", ".join(missing))
+    return False
 
 
 def get_config(argv: list[str] | None = None) -> AsyncUploadConfig:
@@ -462,6 +525,8 @@ def get_config(argv: list[str] | None = None) -> AsyncUploadConfig:
             if not metadata.model_version or not metadata.model_artifact:
                 raise ValueError("create_version intent requires ModelVersion and ModelArtifact metadata")
 
+    signing_enabled = _resolve_signing(args.sign)
+
     try:
         config = AsyncUploadConfig(
             source=source_config,
@@ -484,6 +549,8 @@ def get_config(argv: list[str] | None = None) -> AsyncUploadConfig:
                 log_level=args.registry_log_level,
             ),
             metadata=metadata,
+            signing_enabled=signing_enabled,
+            signing_identity_token_path=args.signing_identity_token_path,
         )
     except Exception as e:
         logger.error("❌ Configuration validation failed: %s", e)

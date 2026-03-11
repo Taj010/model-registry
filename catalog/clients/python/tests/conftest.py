@@ -236,18 +236,21 @@ def api_client(user_token: str | None, verify_ssl: bool) -> Generator[CatalogAPI
 
 
 @pytest.fixture(scope="session")
-def model_with_artifacts(api_client: CatalogAPIClient, verify_ssl: bool) -> tuple[str, str]:
+def model_with_artifacts(
+    request: pytest.FixtureRequest, api_client: CatalogAPIClient, verify_ssl: bool
+) -> tuple[str, str]:
     """Get a model that has artifacts for testing.
 
-    Searches available models to find one with artifacts.
-    Fails if no models or no models with artifacts are found.
+    The param value controls the minimum number of artifacts required.
+    Default is 1. Override via indirect parametrization for tests needing more.
 
     Returns:
         Tuple of (source_id, model_name) for a model with artifacts.
 
     Raises:
-        pytest.fail: If no models are available or no model has artifacts.
+        pytest.fail: If no models are available or no model has enough artifacts.
     """
+    min_artifacts = getattr(request, "param", 1)
     if not verify_ssl:
         urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
@@ -255,27 +258,18 @@ def model_with_artifacts(api_client: CatalogAPIClient, verify_ssl: bool) -> tupl
     if not models.get("items"):
         pytest.fail("No models available - test data may not be loaded")
 
-    # Find a model that has artifacts
     for model in models["items"]:
         source_id = model.get("source_id")
         model_name = model.get("name")
         if not source_id or not model_name:
             continue
 
-        # Check if this model has artifacts
         artifacts = api_client.get_artifacts(source_id=source_id, model_name=model_name)
-        if artifacts.get("items"):
+        items = artifacts.get("items", [])
+        if len(items) >= min_artifacts:
             return source_id, model_name
 
-    # Fallback to first model with required fields
-    model = models["items"][0]
-    source_id = model.get("source_id")
-    model_name = model.get("name")
-
-    if not source_id or not model_name:
-        pytest.fail("Model missing source_id or name - test data may be malformed")
-
-    return source_id, model_name
+    pytest.fail(f"No model with at least {min_artifacts} artifact(s) found")
 
 
 @pytest.fixture(scope="session")
@@ -298,7 +292,59 @@ def test_catalog_data(pytestconfig: pytest.Config) -> dict:
         Dictionary containing the test catalog YAML data.
     """
     test_catalog_path = (
-        Path(pytestconfig.rootpath) / "../../.." / "manifests" / "kustomize" / "options" / "catalog" / "overlays" / "e2e" / "test-catalog.yaml"
+        Path(pytestconfig.rootpath)
+        / "../../.."
+        / "manifests"
+        / "kustomize"
+        / "options"
+        / "catalog"
+        / "overlays"
+        / "e2e"
+        / "test-catalog.yaml"
     )
     with open(test_catalog_path) as f:
+        return yaml.safe_load(f)
+
+
+@pytest.fixture(scope="session")
+def test_mcp_catalog_data(pytestconfig: pytest.Config) -> dict:
+    """Load MCP server test catalog data used by E2E tests.
+
+    Returns:
+        Dictionary containing the MCP server test YAML data.
+    """
+    mcp_catalog_path = (
+        Path(pytestconfig.rootpath)
+        / "../../.."
+        / "manifests"
+        / "kustomize"
+        / "options"
+        / "catalog"
+        / "overlays"
+        / "e2e"
+        / "test-mcp-servers.yaml"
+    )
+    with open(mcp_catalog_path) as f:
+        return yaml.safe_load(f)
+
+
+@pytest.fixture(scope="session")
+def sources_config(pytestconfig: pytest.Config) -> dict:
+    """Load the sources.yaml configuration used by E2E tests.
+
+    Returns:
+        Dictionary containing the sources YAML data (catalogs + mcp_catalogs).
+    """
+    sources_path = (
+        Path(pytestconfig.rootpath)
+        / "../../.."
+        / "manifests"
+        / "kustomize"
+        / "options"
+        / "catalog"
+        / "overlays"
+        / "e2e"
+        / "sources.yaml"
+    )
+    with open(sources_path) as f:
         return yaml.safe_load(f)

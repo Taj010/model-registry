@@ -21,7 +21,13 @@ export type ModelRegistry = {
   displayName: string;
   description: string;
   serverAddress?: string;
+  /** True if the registry's Service Endpoints have ready addresses; false when starting or misconfigured. */
+  isAvailable?: boolean;
 };
+
+/** True when the registry is explicitly unavailable (isAvailable === false). Undefined/legacy BFF is treated as available. */
+export const isRegistryUnavailable = (mr: ModelRegistry | undefined): boolean =>
+  mr?.isAvailable === false;
 
 export type ModelRegistryPayload = {
   modelRegistry: {
@@ -213,6 +219,8 @@ export type PatchModelArtifact = (
   modelartifactId: string,
 ) => Promise<ModelArtifact>;
 
+export type GetListModelTransferJobs = (opts: APIOptions) => Promise<ModelTransferJobList>;
+
 export type CreateModelTransferJob = (
   opts: APIOptions,
   data: CreateModelTransferJobData,
@@ -220,11 +228,16 @@ export type CreateModelTransferJob = (
 
 export type UpdateModelTransferJob = (
   opts: APIOptions,
-  jobId: string,
+  jobName: string,
   data: Partial<ModelTransferJob>,
+  additionalQueryParams?: Record<string, unknown>,
 ) => Promise<ModelTransferJob>;
 
-export type DeleteModelTransferJob = (opts: APIOptions, jobId: string) => Promise<void>;
+export type DeleteModelTransferJob = (
+  opts: APIOptions,
+  jobName: string,
+  jobNamespace: string,
+) => Promise<void>;
 
 export type ModelRegistryAPIs = {
   createRegisteredModel: CreateRegisteredModel;
@@ -243,10 +256,10 @@ export type ModelRegistryAPIs = {
   createModelTransferJob: CreateModelTransferJob;
   updateModelTransferJob: UpdateModelTransferJob;
   deleteModelTransferJob: DeleteModelTransferJob;
+  getModelTransferJobEvents: GetModelTransferJobEvents;
 };
 
 // Model Transfer Job Types
-
 export enum ModelTransferJobSourceType {
   S3 = 's3',
   OCI = 'oci',
@@ -276,6 +289,8 @@ export type ModelTransferJobS3Source = {
   type: ModelTransferJobSourceType.S3;
   bucket: string;
   key: string;
+  awsAccessKeyId: string;
+  awsSecretAccessKey: string;
   region?: string;
   endpoint?: string;
 };
@@ -283,6 +298,8 @@ export type ModelTransferJobS3Source = {
 export type ModelTransferJobOCISource = {
   type: ModelTransferJobSourceType.OCI;
   uri: string;
+  username: string;
+  password: string;
   registry?: string;
 };
 
@@ -307,6 +324,8 @@ export type ModelTransferJobS3Destination = {
 export type ModelTransferJobOCIDestination = {
   type: ModelTransferJobDestinationType.OCI;
   uri: string;
+  username: string;
+  password: string;
   registry?: string;
 };
 
@@ -314,25 +333,42 @@ export type ModelTransferJobDestination =
   | ModelTransferJobS3Destination
   | ModelTransferJobOCIDestination;
 
+export type ModelTransferJobEvent = {
+  timestamp: string;
+  type: string;
+  reason: string;
+  message: string;
+};
+
 export type ModelTransferJob = {
   id: string;
   name: string;
+  jobDisplayName: string;
   description?: string;
   source: ModelTransferJobSource;
   destination: ModelTransferJobDestination;
   uploadIntent: ModelTransferJobUploadIntent;
   registeredModelId?: string;
   registeredModelName?: string;
+  modelDescription?: string;
   modelVersionId?: string;
   modelVersionName?: string;
+  versionDescription?: string;
   modelArtifactId?: string;
   modelArtifactName?: string;
-  namespace?: string;
+  sourceModelFormat?: string;
+  sourceModelFormatVersion?: string;
+  namespace: string;
   author?: string;
   status: ModelTransferJobStatus;
   createTimeSinceEpoch: string;
   lastUpdateTimeSinceEpoch: string;
   errorMessage?: string;
+  modelCustomProperties?: ModelRegistryCustomProperties;
+  versionCustomProperties?: ModelRegistryCustomProperties;
+  sourceSecretName?: string;
+  destSecretName?: string;
+  events?: ModelTransferJobEvent[];
 };
 
 export type CreateModelTransferJobData = Omit<
@@ -342,4 +378,8 @@ export type CreateModelTransferJobData = Omit<
 
 export type ModelTransferJobList = ModelRegistryListParams & { items: ModelTransferJob[] };
 
-export type GetListModelTransferJobs = (opts: APIOptions) => Promise<ModelTransferJobList>;
+export type GetModelTransferJobEvents = (
+  opts: APIOptions,
+  jobName: string,
+  jobNamespace: string,
+) => Promise<ModelTransferJobEvent[]>;

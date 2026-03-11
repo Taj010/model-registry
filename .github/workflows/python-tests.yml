@@ -110,6 +110,12 @@ jobs:
           - python: "3.10"
             kubernetes-version: "v1.33.7"
             manifest-db: "db"
+          - python: "3.13"
+            kubernetes-version: "v1.34.3"
+            manifest-db: "db"
+          - python: "3.14"
+            kubernetes-version: "v1.34.3"
+            manifest-db: "db"
     env:
       FORCE_COLOR: "1"
       IMG_REGISTRY: ghcr.io
@@ -145,7 +151,7 @@ jobs:
           IMG_VERSION: ${{ steps.tags.outputs.tag }}
         run: make image/build
       - name: Start Kind Cluster
-        uses: helm/kind-action@v1.13.0
+        uses: helm/kind-action@v1.14.0
         with:
           node_image: kindest/node:${{ matrix.kubernetes-version }}
           cluster_name: chart-testing-py-${{ matrix.python }}
@@ -215,12 +221,12 @@ jobs:
           nox --python=${{ matrix.python }}
           poetry build
       - name: Upload dist
-        uses: actions/upload-artifact@v6.0.0
+        uses: actions/upload-artifact@v7.0.0
         with:
           name: py-dist
           path: clients/python/dist
       - name: Upload documentation
-        uses: actions/upload-artifact@v6.0.0
+        uses: actions/upload-artifact@v7.0.0
         with:
           name: py-docs
           path: clients/python/docs/_build
@@ -248,7 +254,7 @@ jobs:
         with:
           python-version: ${{ env.PYTHON_VERSION }}
       - name: Start Kind Cluster
-        uses: helm/kind-action@v1.13.0
+        uses: helm/kind-action@v1.14.0
         with:
           node_image: kindest/node:${{ env.KUBERNETES_VERSION }}
           cluster_name: ${{ env.CLUSTER_NAME }}

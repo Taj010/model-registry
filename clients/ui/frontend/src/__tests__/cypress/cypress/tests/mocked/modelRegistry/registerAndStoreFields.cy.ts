@@ -117,9 +117,13 @@ describe('Register and Store Fields - NamespaceSelector', () => {
     registerAndStoreFields.shouldHideOriginLocationSection().shouldHideDestinationLocationSection();
   });
 
-  it('Should show form sections after namespace selection', () => {
+  it('Should show form sections after namespace selection when namespace has access', () => {
+    cy.intercept('POST', '**/api/v1/check-namespace-registry-access', {
+      statusCode: 200,
+      body: { data: { hasAccess: true } },
+    }).as('checkNamespaceAccess');
     registerAndStoreFields.selectNamespace('namespace-1');
-
+    cy.wait('@checkNamespaceAccess');
     registerAndStoreFields.shouldShowOriginLocationSection();
     registerAndStoreFields.shouldShowDestinationLocationSection();
   });
@@ -135,18 +139,187 @@ describe('Register and Store Fields - NamespaceSelector', () => {
     registerAndStoreFields.selectRegisterAndStoreMode();
 
     registerAndStoreFields.findNamespaceSelector().should('exist');
-    registerAndStoreFields.findNamespaceSelector().should('be.disabled');
-
+    registerAndStoreFields.shouldBeNamespaceSelectorDisabled();
+    registerAndStoreFields.shouldShowNoNamespacesMessage();
     registerAndStoreFields.shouldShowPlaceholder('Select a namespace');
+  });
+
+  it('Should show no-access message and keep dropdown disabled when no namespaces', () => {
+    initIntercepts({ namespaces: [] });
+    registerAndStoreFields.visit();
+    registerAndStoreFields.selectRegisterAndStoreMode();
+
+    registerAndStoreFields.findNamespaceSelector().should('exist');
+    registerAndStoreFields.shouldBeNamespaceSelectorDisabled();
+    registerAndStoreFields.shouldShowNoNamespacesMessage();
+  });
+});
+
+describe('Register and Store Fields - Namespace access validation', () => {
+  beforeEach(() => {
+    initIntercepts({});
+    cy.intercept('POST', '**/api/v1/check-namespace-registry-access', {
+      statusCode: 200,
+      body: { data: { hasAccess: false } },
+    }).as('checkNamespaceAccess');
+    registerAndStoreFields.visit(true, 'namespace-1');
+    registerAndStoreFields.selectRegisterAndStoreMode();
+  });
+
+  it('Should show "Namespace" label', () => {
+    registerAndStoreFields.shouldShowNamespaceLabel();
+  });
+
+  it('Should show warning when selected namespace has no access to registry', () => {
+    registerAndStoreFields.selectNamespace('namespace-1');
+    cy.wait('@checkNamespaceAccess');
+    registerAndStoreFields.shouldShowNoAccessWarning();
+  });
+
+  it('Should not show form sections when selected namespace has no access to registry', () => {
+    registerAndStoreFields.selectNamespace('namespace-1');
+    cy.wait('@checkNamespaceAccess');
+    registerAndStoreFields.shouldHideOriginLocationSection().shouldHideDestinationLocationSection();
+  });
+
+  it('Should keep Create button disabled when selected namespace has no access', () => {
+    registerAndStoreFields.selectNamespace('namespace-1');
+    cy.wait('@checkNamespaceAccess');
+    registerAndStoreFields.shouldHaveCreateButtonDisabled();
+  });
+});
+
+describe('Register and Store Fields - Namespace loading error', () => {
+  beforeEach(() => {
+    initIntercepts({});
+    // Use a dynamic handler: the first call (from the app context/navbar) must succeed
+    // for the page to render; only the second call (from the form's useNamespaces) should fail.
+    let namespaceFetchCount = 0;
+    cy.intercept(
+      {
+        method: 'GET',
+        pathname: `/model-registry/api/${MODEL_REGISTRY_API_VERSION}/namespaces`,
+      },
+      (req) => {
+        namespaceFetchCount += 1;
+        if (namespaceFetchCount <= 1) {
+          req.reply({ statusCode: 200, body: { data: [mockNamespace({})] } });
+        } else {
+          req.reply({ statusCode: 500, body: { error: 'failed to list namespaces' } });
+        }
+      },
+    ).as('getNamespacesError');
+    registerAndStoreFields.visit();
+    registerAndStoreFields.selectRegisterAndStoreMode();
+  });
+
+  it('Should show error alert when namespace loading fails', () => {
+    registerAndStoreFields.shouldShowNamespaceLoadError();
+  });
+
+  it('Should disable namespace selector when loading fails', () => {
+    registerAndStoreFields.shouldBeNamespaceSelectorDisabled();
+  });
+
+  it('Should hide form sections when namespace loading fails', () => {
+    registerAndStoreFields.shouldHideOriginLocationSection();
+    registerAndStoreFields.shouldHideDestinationLocationSection();
+  });
+
+  it('Should keep Create button disabled when namespace loading fails', () => {
+    registerAndStoreFields.shouldHaveCreateButtonDisabled();
+  });
+});
+
+describe('Register and Store Fields - Namespace access check error', () => {
+  beforeEach(() => {
+    initIntercepts({});
+    cy.intercept('POST', '**/api/v1/check-namespace-registry-access', {
+      statusCode: 500,
+      body: { error: 'failed to check namespace access' },
+    }).as('checkNamespaceAccessError');
+    registerAndStoreFields.visit();
+    registerAndStoreFields.selectRegisterAndStoreMode();
+  });
+
+  it('Should show error alert when namespace access check fails', () => {
+    registerAndStoreFields.selectNamespace('namespace-1');
+    cy.wait('@checkNamespaceAccessError');
+    registerAndStoreFields.shouldShowNamespaceAccessCheckError();
+  });
+
+  it('Should hide form sections when access check fails', () => {
+    registerAndStoreFields.selectNamespace('namespace-1');
+    cy.wait('@checkNamespaceAccessError');
+    registerAndStoreFields.shouldHideOriginLocationSection();
+    registerAndStoreFields.shouldHideDestinationLocationSection();
+  });
+
+  it('Should keep Create button disabled when access check fails', () => {
+    registerAndStoreFields.selectNamespace('namespace-1');
+    cy.wait('@checkNamespaceAccessError');
+    registerAndStoreFields.shouldHaveCreateButtonDisabled();
+  });
+});
+
+describe('Register and Store Fields - Who is my admin popover (namespace wording)', () => {
+  beforeEach(() => {
+    initIntercepts({ namespaces: [] });
+    registerAndStoreFields.visit();
+    registerAndStoreFields.selectRegisterAndStoreMode();
+  });
+
+  it('Should show Who is my admin popover with namespace wording when no namespaces', () => {
+    registerAndStoreFields.shouldShowNoNamespacesMessage();
+    registerAndStoreFields.openWhoIsMyAdminPopover();
+    registerAndStoreFields.shouldShowWhoIsMyAdminPopoverWithNamespaceWording();
+  });
+});
+
+describe('Register and Store Fields - Feature flag behavior', () => {
+  beforeEach(() => {
+    initIntercepts({});
+
+    cy.intercept('POST', '**/api/v1/check-namespace-registry-access', {
+      statusCode: 200,
+      body: { data: { hasAccess: true } },
+    }).as('checkNamespaceAccess');
+
+    registerAndStoreFields.visit();
+  });
+
+  it('Should hide Register and store sections when feature flag is disabled at runtime', () => {
+    registerAndStoreFields.shouldHaveRegistrationModeToggle();
+    registerAndStoreFields.selectRegisterAndStoreMode();
+    registerAndStoreFields.selectNamespace('namespace-1');
+    cy.wait('@checkNamespaceAccess');
+
+    registerAndStoreFields.shouldShowOriginLocationSection();
+    registerAndStoreFields.shouldShowDestinationLocationSection();
+
+    cy.window().then((win) => {
+      (
+        win as Window & { setTempDevRegistryStorageFeatureAvailable?: (enabled: boolean) => void }
+      ).setTempDevRegistryStorageFeatureAvailable?.(false);
+    });
+
+    registerAndStoreFields.findRegistrationModeToggleGroup().should('not.exist');
+
+    registerAndStoreFields.shouldHideOriginLocationSection().shouldHideDestinationLocationSection();
   });
 });
 
 describe('Register and Store Fields - Credential Validation', () => {
   beforeEach(() => {
     initIntercepts({});
+    cy.intercept('POST', '**/api/v1/check-namespace-registry-access', {
+      statusCode: 200,
+      body: { data: { hasAccess: true } },
+    }).as('checkNamespaceAccess');
     registerAndStoreFields.visit();
     registerAndStoreFields.selectRegisterAndStoreMode();
     registerAndStoreFields.selectNamespace('namespace-1');
+    cy.wait('@checkNamespaceAccess');
   });
 
   it('Should have submit button disabled when S3 access key ID is missing', () => {
@@ -230,20 +403,48 @@ describe('Register and Store Fields - Credential Validation', () => {
 describe('Register and Store Fields - Form Submission', () => {
   beforeEach(() => {
     initIntercepts({});
+    cy.intercept('POST', '**/api/v1/check-namespace-registry-access', {
+      statusCode: 200,
+      body: { data: { hasAccess: true } },
+    }).as('checkNamespaceAccess');
     registerAndStoreFields.visit();
   });
 
   it('Should have submit button disabled when required fields are empty', () => {
     registerAndStoreFields.selectRegisterAndStoreMode();
     registerAndStoreFields.selectNamespace('namespace-1');
+    cy.wait('@checkNamespaceAccess');
     registerAndStoreFields.findSubmitButton().should('be.disabled');
   });
 
   it('Should enable submit button when all required fields are filled', () => {
     registerAndStoreFields.selectRegisterAndStoreMode();
     registerAndStoreFields.selectNamespace('namespace-1');
+    cy.wait('@checkNamespaceAccess');
     registerAndStoreFields.fillAllRequiredFields();
     registerAndStoreFields.findSubmitButton().should('not.be.disabled');
+  });
+
+  it('Should show submitting notification when Create is clicked in Register and Store mode', () => {
+    const mockJob = mockModelTransferJob({ id: 'new-job-id' });
+    cy.interceptApi(
+      'POST /api/:apiVersion/model_registry/:modelRegistryName/model_transfer_jobs',
+      {
+        path: {
+          apiVersion: MODEL_REGISTRY_API_VERSION,
+          modelRegistryName: 'modelregistry-sample',
+        },
+      },
+      mockJob,
+    ).as('createTransferJob');
+
+    registerAndStoreFields.selectRegisterAndStoreMode();
+    registerAndStoreFields.selectNamespace('namespace-1');
+    cy.wait('@checkNamespaceAccess');
+    registerAndStoreFields.fillAllRequiredFields();
+    registerAndStoreFields.findSubmitButton().click();
+
+    cy.contains(/Model transfer job started/).should('be.visible');
   });
 
   it('Should create transfer job and navigate to model list on success', () => {
@@ -262,11 +463,12 @@ describe('Register and Store Fields - Form Submission', () => {
 
     registerAndStoreFields.selectRegisterAndStoreMode();
     registerAndStoreFields.selectNamespace('namespace-1');
-    // Verify namespace is selected before filling other fields
+    cy.wait('@checkNamespaceAccess');
     registerAndStoreFields.shouldShowSelectedNamespace('namespace-1');
     registerAndStoreFields.fillAllRequiredFields();
     registerAndStoreFields.findSubmitButton().click();
 
+    cy.contains(/Model transfer job started/).should('be.visible');
     cy.wait('@createTransferJob').then((interception) => {
       // Body might be a string if Content-Type isn't detected correctly
       const rawBody =
@@ -296,11 +498,13 @@ describe('Register and Store Fields - Form Submission', () => {
 
     registerAndStoreFields.selectRegisterAndStoreMode();
     registerAndStoreFields.selectNamespace('namespace-1');
+    cy.wait('@checkNamespaceAccess');
     registerAndStoreFields.fillAllRequiredFields();
     registerAndStoreFields.findSubmitButton().click();
 
     cy.wait('@createTransferJobError');
     cy.url().should('include', '/register');
+    cy.contains(/Failed to create transfer job/).should('be.visible');
   });
 
   it('Should NOT call registerModel API in Register and Store mode', () => {
@@ -330,6 +534,7 @@ describe('Register and Store Fields - Form Submission', () => {
 
     registerAndStoreFields.selectRegisterAndStoreMode();
     registerAndStoreFields.selectNamespace('namespace-1');
+    cy.wait('@checkNamespaceAccess');
     registerAndStoreFields.fillAllRequiredFields();
     registerAndStoreFields.findSubmitButton().click();
 

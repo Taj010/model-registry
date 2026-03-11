@@ -77,9 +77,18 @@ const (
 	CatalogSourcePreviewPath                 = ModelCatalogSettingsPathPrefix + "/source_preview"
 
 	// Model Transfer Jobs
-	ModelTransferJobId       = "job_id"
-	ModelTransferJobListPath = ModelRegistryPath + "/model_transfer_jobs"
-	ModelTransferJobPath     = ModelTransferJobListPath + "/:" + ModelTransferJobId
+	ModelTransferJobName       = "job_name"
+	ModelTransferJobListPath   = ModelRegistryPath + "/model_transfer_jobs"
+	ModelTransferJobPath       = ModelTransferJobListPath + "/:" + ModelTransferJobName
+	ModelTransferJobEventsPath = ModelTransferJobPath + "/events"
+
+	// MCP server catalog
+	McpServerId                   = "server_id"
+	McpServerCatalogPathPrefix    = ApiPathPrefix + "/mcp_catalog"
+	McpServerListPath             = McpServerCatalogPathPrefix + "/mcp_servers"
+	McpServerFilterOptionListPath = McpServerCatalogPathPrefix + "/mcp_servers_filter_options"
+	McpServerPath                 = McpServerListPath + "/:" + McpServerId
+	McpServersToolListPath        = McpServerPath + "/tools"
 )
 
 type App struct {
@@ -239,6 +248,8 @@ func (app *App) Routes() http.Handler {
 
 	// Model Transfer Jobs
 	apiRouter.GET(ModelTransferJobListPath, app.AttachNamespace(app.RequireAccessToMRService(app.GetAllModelTransferJobsHandler)))
+	apiRouter.GET(ModelTransferJobPath, app.AttachNamespace(app.RequireAccessToMRService(app.GetModelTransferJobHandler)))
+	apiRouter.GET(ModelTransferJobEventsPath, app.AttachNamespace(app.RequireAccessToMRService(app.GetModelTransferJobEventsHandler)))
 	apiRouter.POST(ModelTransferJobListPath, app.AttachNamespace(app.RequireAccessToMRService(app.CreateModelTransferJobHandler)))
 	apiRouter.PATCH(ModelTransferJobPath, app.AttachNamespace(app.RequireAccessToMRService(app.UpdateModelTransferJobHandler)))
 	apiRouter.DELETE(ModelTransferJobPath, app.AttachNamespace(app.RequireAccessToMRService(app.DeleteModelTransferJobHandler)))
@@ -253,6 +264,7 @@ func (app *App) Routes() http.Handler {
 	apiRouter.GET(CatalogModelPerformanceArtifacts, app.AttachNamespace(app.AttachModelCatalogRESTClient(app.GetCatalogModelPerformanceArtifactsHandler)))
 	// Kubernetes routes
 	apiRouter.GET(UserPath, app.UserHandler)
+	apiRouter.POST(CheckNamespaceRegistryAccessPath, app.CheckNamespaceRegistryAccessHandler)
 	apiRouter.GET(ModelRegistryListPath, app.AttachNamespace(app.RequireListServiceAccessInNamespace(app.GetAllModelRegistriesHandler)))
 
 	// Enable these routes in all cases except Kubeflow integration mode
@@ -295,6 +307,12 @@ func (app *App) Routes() http.Handler {
 		apiRouter.PATCH(ModelCatalogSettingsSourceConfigPath, app.AttachNamespace(app.UpdateCatalogSourceConfigHandler))
 		apiRouter.DELETE(ModelCatalogSettingsSourceConfigPath, app.AttachNamespace(app.DeleteCatalogSourceConfigHandler))
 		apiRouter.POST(CatalogSourcePreviewPath, app.AttachNamespace(app.AttachModelCatalogRESTClient(app.CreateCatalogSourcePreviewHandler)))
+
+		// MCP server catalog endpoints
+		apiRouter.GET(McpServerListPath, app.AttachNamespace(app.AttachModelCatalogRESTClient(app.GetAllMcpServersHandler)))
+		apiRouter.GET(McpServerFilterOptionListPath, app.AttachNamespace(app.AttachModelCatalogRESTClient(app.GetMcpServersFiltersHandler)))
+		apiRouter.GET(McpServerPath, app.AttachNamespace(app.AttachModelCatalogRESTClient(app.GetMcpServerHandler)))
+		apiRouter.GET(McpServersToolListPath, app.AttachNamespace(app.AttachModelCatalogRESTClient(app.GetMcpServersToolsHandler)))
 	}
 
 	// App Router

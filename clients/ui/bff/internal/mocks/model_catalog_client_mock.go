@@ -175,7 +175,14 @@ func (m *ModelCatalogClientMock) GetCatalogSourceModel(client httpclient.HTTPCli
 }
 
 func (m *ModelCatalogClientMock) GetAllCatalogSources(client httpclient.HTTPClientInterface, pageValues url.Values) (*models.CatalogSourceList, error) {
-	allMockSources := GetCatalogSourceListMock()
+	var allMockSources models.CatalogSourceList
+	assetType := pageValues.Get("assetType")
+
+	if assetType == "mcp_servers" {
+		allMockSources = GetMcpServerCatalogSourceListMock()
+	} else {
+		allMockSources = GetCatalogSourceListMock()
+	}
 	var filteredMockSources []models.CatalogSource
 
 	name := pageValues.Get("name")
@@ -267,4 +274,36 @@ func (m *ModelCatalogClientMock) CreateCatalogSourcePreview(client httpclient.HT
 	catalogSourcePreview := CreateCatalogSourcePreviewMockWithFilter(filterStatus, pageSize, nextPageToken)
 
 	return &catalogSourcePreview, nil
+}
+
+func (m *ModelCatalogClientMock) GetAllMcpServers(client httpclient.HTTPClientInterface, pageValues url.Values) (*models.McpServerList, error) {
+	mcpServers := GetMcpServerListMock()
+
+	return &mcpServers, nil
+}
+
+func (m *ModelCatalogClientMock) GetMcpServersFilter(client httpclient.HTTPClientInterface) (*models.FilterOptionsList, error) {
+	mcpFilterOptions := GetMcpFilterOptionsListMock()
+
+	return &mcpFilterOptions, nil
+}
+
+func (m *ModelCatalogClientMock) GetMcpServer(client httpclient.HTTPClientInterface, serverId string, pageValues url.Values) (*models.McpServer, error) {
+	allMocks := GetMcpServerMocks()
+	id, err := strconv.ParseInt(serverId, 10, 64)
+	if err != nil {
+		return nil, fmt.Errorf("server id doesn't exist: %w", err)
+	}
+	for i := range allMocks {
+		if int64(allMocks[i].ID) == id {
+			return &allMocks[i], nil
+		}
+	}
+	return nil, fmt.Errorf("server id doesn't exist: %s", serverId)
+}
+
+func (m *ModelCatalogClientMock) GetMcpServersTools(client httpclient.HTTPClientInterface, serverId string) (*models.McpToolList, error) {
+	mcpServerTools := GetMcpToolListMock()
+
+	return &mcpServerTools, nil
 }

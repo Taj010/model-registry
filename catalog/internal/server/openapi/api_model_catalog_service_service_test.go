@@ -11,7 +11,7 @@ import (
 	"time"
 
 	"github.com/kubeflow/model-registry/catalog/internal/catalog"
-	dbmodels "github.com/kubeflow/model-registry/catalog/internal/db/models"
+	"github.com/kubeflow/model-registry/catalog/internal/catalog/modelcatalog"
 	model "github.com/kubeflow/model-registry/catalog/pkg/openapi"
 	mrmodels "github.com/kubeflow/model-registry/internal/db/models"
 	"github.com/stretchr/testify/assert"
@@ -294,7 +294,7 @@ func TestFindModels(t *testing.T) {
 			// Create mock source collection
 			sources := catalog.NewSourceCollection()
 			sources.Merge("",
-				map[string]catalog.Source{
+				map[string]catalog.ModelSource{
 					"source1": {CatalogSource: model.CatalogSource{Id: "source1", Name: "Test Source 1"}},
 				},
 			)
@@ -305,7 +305,7 @@ func TestFindModels(t *testing.T) {
 				models: tc.mockModels,
 			}
 
-			service := NewModelCatalogServiceAPIService(provider, sources, sourceLabels, nil)
+			service := NewModelCatalogServiceAPIService(provider, sources, nil, sourceLabels, nil)
 
 			resp, err := service.FindModels(
 				context.Background(),
@@ -353,7 +353,7 @@ func TestFindSources(t *testing.T) {
 	trueValue := true
 	testCases := []struct {
 		name           string
-		catalogs       map[string]catalog.Source
+		catalogs       map[string]catalog.ModelSource
 		nameFilter     string
 		pageSize       string
 		orderBy        model.OrderByField
@@ -368,7 +368,7 @@ func TestFindSources(t *testing.T) {
 	}{
 		{
 			name:           "Empty catalog list",
-			catalogs:       map[string]catalog.Source{},
+			catalogs:       map[string]catalog.ModelSource{},
 			nameFilter:     "",
 			pageSize:       "10",
 			orderBy:        model.ORDERBYFIELD_ID,
@@ -379,7 +379,7 @@ func TestFindSources(t *testing.T) {
 		},
 		{
 			name: "Single catalog",
-			catalogs: map[string]catalog.Source{
+			catalogs: map[string]catalog.ModelSource{
 				"catalog1": {CatalogSource: model.CatalogSource{Id: "catalog1", Name: "Test Catalog 1", Enabled: &trueValue}},
 			},
 			nameFilter:     "",
@@ -392,7 +392,7 @@ func TestFindSources(t *testing.T) {
 		},
 		{
 			name: "Multiple catalogs with no filter",
-			catalogs: map[string]catalog.Source{
+			catalogs: map[string]catalog.ModelSource{
 				"catalog1": {CatalogSource: model.CatalogSource{Id: "catalog1", Name: "Test Catalog 1", Enabled: &trueValue}},
 				"catalog2": {CatalogSource: model.CatalogSource{Id: "catalog2", Name: "Test Catalog 2", Enabled: &trueValue}},
 				"catalog3": {CatalogSource: model.CatalogSource{Id: "catalog3", Name: "Another Catalog", Enabled: &trueValue}},
@@ -407,7 +407,7 @@ func TestFindSources(t *testing.T) {
 		},
 		{
 			name: "Filter by name",
-			catalogs: map[string]catalog.Source{
+			catalogs: map[string]catalog.ModelSource{
 				"catalog1": {CatalogSource: model.CatalogSource{Id: "catalog1", Name: "Test Catalog 1", Enabled: &trueValue}},
 				"catalog2": {CatalogSource: model.CatalogSource{Id: "catalog2", Name: "Test Catalog 2", Enabled: &trueValue}},
 				"catalog3": {CatalogSource: model.CatalogSource{Id: "catalog3", Name: "Another Catalog", Enabled: &trueValue}},
@@ -422,7 +422,7 @@ func TestFindSources(t *testing.T) {
 		},
 		{
 			name: "Filter by name case insensitive",
-			catalogs: map[string]catalog.Source{
+			catalogs: map[string]catalog.ModelSource{
 				"catalog1": {CatalogSource: model.CatalogSource{Id: "catalog1", Name: "Test Catalog 1", Enabled: &trueValue}},
 				"catalog2": {CatalogSource: model.CatalogSource{Id: "catalog2", Name: "Test Catalog 2", Enabled: &trueValue}},
 				"catalog3": {CatalogSource: model.CatalogSource{Id: "catalog3", Name: "Another Catalog", Enabled: &trueValue}},
@@ -437,7 +437,7 @@ func TestFindSources(t *testing.T) {
 		},
 		{
 			name: "Pagination - limit results",
-			catalogs: map[string]catalog.Source{
+			catalogs: map[string]catalog.ModelSource{
 				"catalog1": {CatalogSource: model.CatalogSource{Id: "catalog1", Name: "Test Catalog 1", Enabled: &trueValue}},
 				"catalog2": {CatalogSource: model.CatalogSource{Id: "catalog2", Name: "Test Catalog 2", Enabled: &trueValue}},
 				"catalog3": {CatalogSource: model.CatalogSource{Id: "catalog3", Name: "Another Catalog", Enabled: &trueValue}},
@@ -452,7 +452,7 @@ func TestFindSources(t *testing.T) {
 		},
 		{
 			name: "Default page size",
-			catalogs: map[string]catalog.Source{
+			catalogs: map[string]catalog.ModelSource{
 				"catalog1": {CatalogSource: model.CatalogSource{Id: "catalog1", Name: "Test Catalog 1", Enabled: &trueValue}},
 				"catalog2": {CatalogSource: model.CatalogSource{Id: "catalog2", Name: "Test Catalog 2", Enabled: &trueValue}},
 			},
@@ -466,7 +466,7 @@ func TestFindSources(t *testing.T) {
 		},
 		{
 			name: "Invalid page size",
-			catalogs: map[string]catalog.Source{
+			catalogs: map[string]catalog.ModelSource{
 				"catalog1": {CatalogSource: model.CatalogSource{Id: "catalog1", Name: "Test Catalog 1", Enabled: &trueValue}},
 			},
 			nameFilter:     "",
@@ -477,7 +477,7 @@ func TestFindSources(t *testing.T) {
 		},
 		{
 			name: "Sort by ID ascending",
-			catalogs: map[string]catalog.Source{
+			catalogs: map[string]catalog.ModelSource{
 				"catalog2": {CatalogSource: model.CatalogSource{Id: "catalog2", Name: "B Catalog", Enabled: &trueValue}},
 				"catalog1": {CatalogSource: model.CatalogSource{Id: "catalog1", Name: "A Catalog", Enabled: &trueValue}},
 				"catalog3": {CatalogSource: model.CatalogSource{Id: "catalog3", Name: "C Catalog", Enabled: &trueValue}},
@@ -493,7 +493,7 @@ func TestFindSources(t *testing.T) {
 		},
 		{
 			name: "Sort by ID descending",
-			catalogs: map[string]catalog.Source{
+			catalogs: map[string]catalog.ModelSource{
 				"catalog2": {CatalogSource: model.CatalogSource{Id: "catalog2", Name: "B Catalog", Enabled: &trueValue}},
 				"catalog1": {CatalogSource: model.CatalogSource{Id: "catalog1", Name: "A Catalog", Enabled: &trueValue}},
 				"catalog3": {CatalogSource: model.CatalogSource{Id: "catalog3", Name: "C Catalog", Enabled: &trueValue}},
@@ -509,7 +509,7 @@ func TestFindSources(t *testing.T) {
 		},
 		{
 			name: "Sort by name ascending",
-			catalogs: map[string]catalog.Source{
+			catalogs: map[string]catalog.ModelSource{
 				"catalog2": {CatalogSource: model.CatalogSource{Id: "catalog2", Name: "B Catalog", Enabled: &trueValue}},
 				"catalog1": {CatalogSource: model.CatalogSource{Id: "catalog1", Name: "A Catalog", Enabled: &trueValue}},
 				"catalog3": {CatalogSource: model.CatalogSource{Id: "catalog3", Name: "C Catalog", Enabled: &trueValue}},
@@ -525,7 +525,7 @@ func TestFindSources(t *testing.T) {
 		},
 		{
 			name: "Sort by name descending",
-			catalogs: map[string]catalog.Source{
+			catalogs: map[string]catalog.ModelSource{
 				"catalog2": {CatalogSource: model.CatalogSource{Id: "catalog2", Name: "B Catalog", Enabled: &trueValue}},
 				"catalog1": {CatalogSource: model.CatalogSource{Id: "catalog1", Name: "A Catalog", Enabled: &trueValue}},
 				"catalog3": {CatalogSource: model.CatalogSource{Id: "catalog3", Name: "C Catalog"}},
@@ -541,7 +541,7 @@ func TestFindSources(t *testing.T) {
 		},
 		{
 			name: "Invalid sort order",
-			catalogs: map[string]catalog.Source{
+			catalogs: map[string]catalog.ModelSource{
 				"catalog1": {CatalogSource: model.CatalogSource{Id: "catalog1", Name: "Test Catalog 1"}},
 			},
 			nameFilter:     "",
@@ -552,7 +552,7 @@ func TestFindSources(t *testing.T) {
 		},
 		{
 			name: "Invalid order by field",
-			catalogs: map[string]catalog.Source{
+			catalogs: map[string]catalog.ModelSource{
 				"catalog1": {CatalogSource: model.CatalogSource{Id: "catalog1", Name: "Test Catalog 1"}},
 			},
 			nameFilter:     "",
@@ -563,7 +563,7 @@ func TestFindSources(t *testing.T) {
 		},
 		{
 			name: "Default sort order (ID ascending)",
-			catalogs: map[string]catalog.Source{
+			catalogs: map[string]catalog.ModelSource{
 				"catalog2": {CatalogSource: model.CatalogSource{Id: "catalog2", Name: "B Catalog"}},
 				"catalog1": {CatalogSource: model.CatalogSource{Id: "catalog1", Name: "A Catalog"}},
 				"catalog3": {CatalogSource: model.CatalogSource{Id: "catalog3", Name: "C Catalog"}},
@@ -579,7 +579,7 @@ func TestFindSources(t *testing.T) {
 		},
 		{
 			name: "Labels should be returned if set",
-			catalogs: map[string]catalog.Source{
+			catalogs: map[string]catalog.ModelSource{
 				"catalog1": {CatalogSource: model.CatalogSource{Id: "catalog1", Name: "Test Catalog 1", Labels: []string{"label1", "label2"}}},
 				"catalog2": {CatalogSource: model.CatalogSource{Id: "catalog2", Name: "Test Catalog 2", Labels: []string{"label3", "label4"}}},
 				"catalog3": {CatalogSource: model.CatalogSource{Id: "catalog3", Name: "Test Catalog 3", Labels: []string{"label5", "label6"}}},
@@ -599,7 +599,7 @@ func TestFindSources(t *testing.T) {
 	falseValue := false
 	newTestCases := []struct {
 		name           string
-		catalogs       map[string]catalog.Source
+		catalogs       map[string]catalog.ModelSource
 		nameFilter     string
 		pageSize       string
 		orderBy        model.OrderByField
@@ -614,7 +614,7 @@ func TestFindSources(t *testing.T) {
 	}{
 		{
 			name: "All sources returned regardless of enabled status",
-			catalogs: map[string]catalog.Source{
+			catalogs: map[string]catalog.ModelSource{
 				"enabled1":  {CatalogSource: model.CatalogSource{Id: "enabled1", Name: "Enabled Source 1", Enabled: &trueValue}},
 				"disabled1": {CatalogSource: model.CatalogSource{Id: "disabled1", Name: "Disabled Source 1", Enabled: &falseValue}},
 				"enabled2":  {CatalogSource: model.CatalogSource{Id: "enabled2", Name: "Enabled Source 2", Enabled: &trueValue}},
@@ -631,7 +631,7 @@ func TestFindSources(t *testing.T) {
 		},
 		{
 			name: "Enabled field present in response for all sources",
-			catalogs: map[string]catalog.Source{
+			catalogs: map[string]catalog.ModelSource{
 				"enabled1":  {CatalogSource: model.CatalogSource{Id: "enabled1", Name: "Enabled Source 1", Enabled: &trueValue}},
 				"disabled1": {CatalogSource: model.CatalogSource{Id: "disabled1", Name: "Disabled Source 1", Enabled: &falseValue}},
 			},
@@ -646,7 +646,7 @@ func TestFindSources(t *testing.T) {
 		},
 		{
 			name: "Name filtering works across all sources (enabled and disabled)",
-			catalogs: map[string]catalog.Source{
+			catalogs: map[string]catalog.ModelSource{
 				"enabled1":  {CatalogSource: model.CatalogSource{Id: "enabled1", Name: "Test Source A", Enabled: &trueValue}},
 				"disabled1": {CatalogSource: model.CatalogSource{Id: "disabled1", Name: "Test Source B", Enabled: &falseValue}},
 				"enabled2":  {CatalogSource: model.CatalogSource{Id: "enabled2", Name: "Other Source", Enabled: &trueValue}},
@@ -662,7 +662,7 @@ func TestFindSources(t *testing.T) {
 		},
 		{
 			name: "Pagination accounts for all sources including disabled",
-			catalogs: map[string]catalog.Source{
+			catalogs: map[string]catalog.ModelSource{
 				"enabled1":  {CatalogSource: model.CatalogSource{Id: "enabled1", Name: "Source 1", Enabled: &trueValue}},
 				"disabled1": {CatalogSource: model.CatalogSource{Id: "disabled1", Name: "Source 2", Enabled: &falseValue}},
 				"enabled2":  {CatalogSource: model.CatalogSource{Id: "enabled2", Name: "Source 3", Enabled: &trueValue}},
@@ -679,7 +679,7 @@ func TestFindSources(t *testing.T) {
 		},
 		{
 			name: "Sorting works across all sources (enabled and disabled interleaved)",
-			catalogs: map[string]catalog.Source{
+			catalogs: map[string]catalog.ModelSource{
 				"source_d": {CatalogSource: model.CatalogSource{Id: "source_d", Name: "D Source", Enabled: &falseValue}},
 				"source_b": {CatalogSource: model.CatalogSource{Id: "source_b", Name: "B Source", Enabled: &trueValue}},
 				"source_a": {CatalogSource: model.CatalogSource{Id: "source_a", Name: "A Source", Enabled: &falseValue}},
@@ -696,7 +696,7 @@ func TestFindSources(t *testing.T) {
 		},
 		{
 			name:           "Empty catalog returns empty list",
-			catalogs:       map[string]catalog.Source{},
+			catalogs:       map[string]catalog.ModelSource{},
 			nameFilter:     "",
 			pageSize:       "10",
 			orderBy:        model.ORDERBYFIELD_ID,
@@ -707,7 +707,7 @@ func TestFindSources(t *testing.T) {
 		},
 		{
 			name: "All sources disabled still returns all sources",
-			catalogs: map[string]catalog.Source{
+			catalogs: map[string]catalog.ModelSource{
 				"disabled1": {CatalogSource: model.CatalogSource{Id: "disabled1", Name: "Disabled Source 1", Enabled: &falseValue}},
 				"disabled2": {CatalogSource: model.CatalogSource{Id: "disabled2", Name: "Disabled Source 2", Enabled: &falseValue}},
 				"disabled3": {CatalogSource: model.CatalogSource{Id: "disabled3", Name: "Disabled Source 3", Enabled: &falseValue}},
@@ -723,7 +723,7 @@ func TestFindSources(t *testing.T) {
 		},
 		{
 			name: "Sorting by NAME works across enabled and disabled sources",
-			catalogs: map[string]catalog.Source{
+			catalogs: map[string]catalog.ModelSource{
 				"source1": {CatalogSource: model.CatalogSource{Id: "source1", Name: "Zebra Catalog", Enabled: &falseValue}},
 				"source2": {CatalogSource: model.CatalogSource{Id: "source2", Name: "Alpha Catalog", Enabled: &trueValue}},
 				"source3": {CatalogSource: model.CatalogSource{Id: "source3", Name: "Beta Catalog", Enabled: &falseValue}},
@@ -748,12 +748,13 @@ func TestFindSources(t *testing.T) {
 			sources := catalog.NewSourceCollection()
 			sources.Merge("", tc.catalogs)
 			sourceLabels := catalog.NewLabelCollection()
-			service := NewModelCatalogServiceAPIService(&mockModelProvider{}, sources, sourceLabels, nil)
+			service := NewModelCatalogServiceAPIService(&mockModelProvider{}, sources, nil, sourceLabels, nil)
 
 			// Call FindSources
 			resp, err := service.FindSources(
 				context.Background(),
 				tc.nameFilter,
+				"",
 				tc.pageSize,
 				tc.orderBy,
 				tc.sortOrder,
@@ -1043,7 +1044,7 @@ func TestFindLabels(t *testing.T) {
 			labelCollection := catalog.NewLabelCollection()
 			labelCollection.Merge("test-source", tc.labels)
 
-			service := NewModelCatalogServiceAPIService(&mockModelProvider{}, sources, labelCollection, nil)
+			service := NewModelCatalogServiceAPIService(&mockModelProvider{}, sources, nil, labelCollection, nil)
 
 			// Call FindLabels
 			resp, err := service.FindLabels(
@@ -1104,7 +1105,7 @@ func TestFindLabels(t *testing.T) {
 						ok1 = val1 != nil
 						ok2 = val2 != nil
 					} else {
-						var v1, v2 interface{}
+						var v1, v2 any
 						v1, ok1 = labelList.Items[i].AdditionalProperties[tc.checkOrderByKey]
 						v2, ok2 = labelList.Items[i+1].AdditionalProperties[tc.checkOrderByKey]
 						if ok1 {
@@ -1179,7 +1180,7 @@ func (m *mockProviderThatFailsOnRecommended) GetFilterOptions(ctx context.Contex
 	return m.mockModelProvider.GetFilterOptions(ctx)
 }
 
-func (m *mockProviderThatFailsOnRecommended) FindModelsWithRecommendedLatency(ctx context.Context, pagination mrmodels.Pagination, paretoParams dbmodels.ParetoFilteringParams, sourceIDs []string, query string) (*model.CatalogModelList, error) {
+func (m *mockProviderThatFailsOnRecommended) FindModelsWithRecommendedLatency(ctx context.Context, pagination mrmodels.Pagination, paretoParams modelcatalog.ParetoFilteringParams, sourceIDs []string, query string) (*model.CatalogModelList, error) {
 	return nil, fmt.Errorf("recommended sorting not implemented")
 }
 
@@ -1224,10 +1225,7 @@ func (m *mockModelProvider) ListModels(ctx context.Context, params catalog.ListM
 	}
 
 	// Apply pagination - limit items to page size
-	endIndex := int(pageSize)
-	if endIndex > len(filteredModels) {
-		endIndex = len(filteredModels)
-	}
+	endIndex := min(int(pageSize), len(filteredModels))
 
 	pagedModels := filteredModels[:endIndex]
 	items := make([]model.CatalogModel, len(pagedModels))
@@ -1272,7 +1270,7 @@ func (m *mockModelProvider) GetFilterOptions(ctx context.Context) (*model.Filter
 	return &model.FilterOptionsList{Filters: &emptyFilters}, nil
 }
 
-func (m *mockModelProvider) FindModelsWithRecommendedLatency(ctx context.Context, pagination mrmodels.Pagination, paretoParams dbmodels.ParetoFilteringParams, sourceIDs []string, query string) (*model.CatalogModelList, error) {
+func (m *mockModelProvider) FindModelsWithRecommendedLatency(ctx context.Context, pagination mrmodels.Pagination, paretoParams modelcatalog.ParetoFilteringParams, sourceIDs []string, query string) (*model.CatalogModelList, error) {
 	// Basic mock implementation - just return models sorted by name
 	var allModels []*model.CatalogModel
 	for _, mdl := range m.models {
@@ -1322,10 +1320,7 @@ func (m *mockModelProvider) GetPerformanceArtifacts(ctx context.Context, modelNa
 				if performanceArtifacts[i].CatalogMetricsArtifact.CustomProperties == nil {
 					performanceArtifacts[i].CatalogMetricsArtifact.CustomProperties = make(map[string]model.MetadataValue)
 				}
-				replicas := int32(params.TargetRPS / 50)
-				if replicas < 1 {
-					replicas = 1
-				}
+				replicas := max(int32(params.TargetRPS/50), 1)
 				totalRPS := float64(params.TargetRPS)
 				replicasStr := strconv.FormatInt(int64(replicas), 10)
 				performanceArtifacts[i].CatalogMetricsArtifact.CustomProperties["replicas"] = model.MetadataIntValueAsMetadataValue(&model.MetadataIntValue{IntValue: replicasStr, MetadataType: "int"})
@@ -1345,7 +1340,7 @@ func (m *mockModelProvider) GetPerformanceArtifacts(ctx context.Context, modelNa
 func TestGetModel(t *testing.T) {
 	testCases := []struct {
 		name           string
-		sources        map[string]catalog.Source
+		sources        map[string]catalog.ModelSource
 		sourceID       string
 		modelName      string
 		expectedStatus int
@@ -1354,7 +1349,7 @@ func TestGetModel(t *testing.T) {
 	}{
 		{
 			name: "Existing model in source",
-			sources: map[string]catalog.Source{
+			sources: map[string]catalog.ModelSource{
 				"source1": {CatalogSource: model.CatalogSource{Id: "source1", Name: "Test Source"}},
 			},
 			provider: &mockModelProvider{
@@ -1373,7 +1368,7 @@ func TestGetModel(t *testing.T) {
 		},
 		{
 			name: "Non-existing source",
-			sources: map[string]catalog.Source{
+			sources: map[string]catalog.ModelSource{
 				"source1": {CatalogSource: model.CatalogSource{Id: "source1", Name: "Test Source"}},
 			},
 			provider: &mockModelProvider{
@@ -1386,7 +1381,7 @@ func TestGetModel(t *testing.T) {
 		},
 		{
 			name: "Existing source, non-existing model",
-			sources: map[string]catalog.Source{
+			sources: map[string]catalog.ModelSource{
 				"source1": {CatalogSource: model.CatalogSource{Id: "source1", Name: "Test Source"}},
 			},
 			provider: &mockModelProvider{
@@ -1399,7 +1394,7 @@ func TestGetModel(t *testing.T) {
 		},
 		{
 			name: "Model name with an escaped slash and version",
-			sources: map[string]catalog.Source{
+			sources: map[string]catalog.ModelSource{
 				"source1": {CatalogSource: model.CatalogSource{Id: "source1", Name: "Test Source"}},
 			},
 			provider: &mockModelProvider{
@@ -1424,7 +1419,7 @@ func TestGetModel(t *testing.T) {
 			sources := catalog.NewSourceCollection()
 			sources.Merge("", tc.sources)
 			sourceLabels := catalog.NewLabelCollection()
-			service := NewModelCatalogServiceAPIService(tc.provider, sources, sourceLabels, nil)
+			service := NewModelCatalogServiceAPIService(tc.provider, sources, nil, sourceLabels, nil)
 
 			// Call GetModel
 			resp, _ := service.GetModel(
@@ -1457,7 +1452,7 @@ func TestGetModel(t *testing.T) {
 func TestGetAllModelArtifacts(t *testing.T) {
 	testCases := []struct {
 		name              string
-		sources           map[string]catalog.Source
+		sources           map[string]catalog.ModelSource
 		sourceID          string
 		modelName         string
 		expectedStatus    int
@@ -1466,7 +1461,7 @@ func TestGetAllModelArtifacts(t *testing.T) {
 	}{
 		{
 			name: "Existing artifacts for model in source",
-			sources: map[string]catalog.Source{
+			sources: map[string]catalog.ModelSource{
 				"source1": {CatalogSource: model.CatalogSource{Id: "source1", Name: "Test Source"}},
 			},
 			provider: &mockModelProvider{
@@ -1503,7 +1498,7 @@ func TestGetAllModelArtifacts(t *testing.T) {
 		},
 		{
 			name: "Non-existing source",
-			sources: map[string]catalog.Source{
+			sources: map[string]catalog.ModelSource{
 				"source1": {CatalogSource: model.CatalogSource{Id: "source1", Name: "Test Source"}},
 			},
 			provider: &mockModelProvider{
@@ -1516,7 +1511,7 @@ func TestGetAllModelArtifacts(t *testing.T) {
 		},
 		{
 			name: "Existing source, no artifacts for model",
-			sources: map[string]catalog.Source{
+			sources: map[string]catalog.ModelSource{
 				"source1": {CatalogSource: model.CatalogSource{Id: "source1", Name: "Test Source"}},
 			},
 			provider: &mockModelProvider{
@@ -1535,7 +1530,7 @@ func TestGetAllModelArtifacts(t *testing.T) {
 			sources := catalog.NewSourceCollection()
 			sources.Merge("", tc.sources)
 			sourceLabels := catalog.NewLabelCollection()
-			service := NewModelCatalogServiceAPIService(tc.provider, sources, sourceLabels, nil)
+			service := NewModelCatalogServiceAPIService(tc.provider, sources, nil, sourceLabels, nil)
 
 			// Call GetAllModelArtifacts
 			resp, _ := service.GetAllModelArtifacts(
@@ -1594,7 +1589,7 @@ func TestFindModelsFilterOptions(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			sources := catalog.NewSourceCollection()
 			sourceLabels := catalog.NewLabelCollection()
-			service := NewModelCatalogServiceAPIService(tc.provider, sources, sourceLabels, nil)
+			service := NewModelCatalogServiceAPIService(tc.provider, sources, nil, sourceLabels, nil)
 
 			resp, err := service.FindModelsFilterOptions(context.Background())
 
@@ -1747,14 +1742,14 @@ func TestGetAllModelPerformanceArtifacts(t *testing.T) {
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			sources := catalog.NewSourceCollection()
-			sources.Merge("", map[string]catalog.Source{
+			sources.Merge("", map[string]catalog.ModelSource{
 				tc.sourceID: {
 					CatalogSource: model.CatalogSource{Id: tc.sourceID, Name: "Test Source"},
 				},
 			})
 			sourceLabels := catalog.NewLabelCollection()
 
-			service := NewModelCatalogServiceAPIService(tc.provider, sources, sourceLabels, nil)
+			service := NewModelCatalogServiceAPIService(tc.provider, sources, nil, sourceLabels, nil)
 
 			resp, err := service.GetAllModelPerformanceArtifacts(
 				context.Background(),
@@ -1813,7 +1808,7 @@ func TestFindModelsRecommended(t *testing.T) {
 	// Setup test server and data
 	sources := catalog.NewSourceCollection()
 	sources.Merge("",
-		map[string]catalog.Source{
+		map[string]catalog.ModelSource{
 			"source1": {CatalogSource: model.CatalogSource{Id: "source1", Name: "Test Source 1"}},
 		},
 	)
@@ -1827,7 +1822,7 @@ func TestFindModelsRecommended(t *testing.T) {
 		},
 	}
 
-	service := NewModelCatalogServiceAPIService(provider, sources, sourceLabels, nil)
+	service := NewModelCatalogServiceAPIService(provider, sources, nil, sourceLabels, nil)
 
 	// Test recommended=true with default parameters
 	resp, err := service.FindModels(
@@ -1862,7 +1857,7 @@ func TestFindModelsRecommended(t *testing.T) {
 func TestFindModelsRecommendedWithCustomParams(t *testing.T) {
 	sources := catalog.NewSourceCollection()
 	sources.Merge("",
-		map[string]catalog.Source{
+		map[string]catalog.ModelSource{
 			"source1": {CatalogSource: model.CatalogSource{Id: "source1", Name: "Test Source 1"}},
 		},
 	)
@@ -1876,7 +1871,7 @@ func TestFindModelsRecommendedWithCustomParams(t *testing.T) {
 		},
 	}
 
-	service := NewModelCatalogServiceAPIService(provider, sources, sourceLabels, nil)
+	service := NewModelCatalogServiceAPIService(provider, sources, nil, sourceLabels, nil)
 
 	// Test with custom latency property and targetRPS
 	resp, err := service.FindModels(
@@ -1911,7 +1906,7 @@ func TestFindModelsRecommendedWithCustomParams(t *testing.T) {
 func TestFindModelsRecommendedIgnoresOrderBy(t *testing.T) {
 	sources := catalog.NewSourceCollection()
 	sources.Merge("",
-		map[string]catalog.Source{
+		map[string]catalog.ModelSource{
 			"source1": {CatalogSource: model.CatalogSource{Id: "source1", Name: "Test Source 1"}},
 		},
 	)
@@ -1925,7 +1920,7 @@ func TestFindModelsRecommendedIgnoresOrderBy(t *testing.T) {
 		},
 	}
 
-	service := NewModelCatalogServiceAPIService(provider, sources, sourceLabels, nil)
+	service := NewModelCatalogServiceAPIService(provider, sources, nil, sourceLabels, nil)
 
 	// Test that orderBy is ignored when recommended=true
 	resp, err := service.FindModels(
@@ -2026,14 +2021,14 @@ func TestGetAllModelPerformanceArtifactsWithConfigurableProperties(t *testing.T)
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			sources := catalog.NewSourceCollection()
-			sources.Merge("", map[string]catalog.Source{
+			sources.Merge("", map[string]catalog.ModelSource{
 				tc.sourceID: {
 					CatalogSource: model.CatalogSource{Id: tc.sourceID, Name: "Test Source"},
 				},
 			})
 			sourceLabels := catalog.NewLabelCollection()
 
-			service := NewModelCatalogServiceAPIService(tc.provider, sources, sourceLabels, nil)
+			service := NewModelCatalogServiceAPIService(tc.provider, sources, nil, sourceLabels, nil)
 
 			resp, err := service.GetAllModelPerformanceArtifacts(
 				context.Background(),

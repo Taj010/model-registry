@@ -13,8 +13,9 @@ import (
 	"strings"
 
 	"github.com/kubeflow/model-registry/catalog/internal/catalog"
+	"github.com/kubeflow/model-registry/catalog/internal/catalog/basecatalog"
+	"github.com/kubeflow/model-registry/catalog/internal/catalog/modelcatalog"
 	"github.com/kubeflow/model-registry/catalog/internal/db/models"
-	dbmodels "github.com/kubeflow/model-registry/catalog/internal/db/models"
 	model "github.com/kubeflow/model-registry/catalog/pkg/openapi"
 	mrmodels "github.com/kubeflow/model-registry/internal/db/models"
 	"github.com/kubeflow/model-registry/pkg/api"
@@ -26,6 +27,7 @@ import (
 type ModelCatalogServiceAPIService struct {
 	provider         catalog.APIProvider
 	sources          *catalog.SourceCollection
+	mcpSources       *catalog.MCPSourceCollection
 	labels           *catalog.LabelCollection
 	sourceRepository models.CatalogSourceRepository
 }
@@ -204,26 +206,6 @@ func (m *ModelCatalogServiceAPIService) FindLabels(ctx context.Context, pageSize
 	return Response(http.StatusOK, res), nil
 }
 
-func (m *ModelCatalogServiceAPIService) FindMCPServers(ctx context.Context, name string, q string, filterQuery string, namedQuery string, includeTools bool, toolLimit int32, pageSize string, orderBy model.OrderByField, sortOrder model.SortOrder, nextPageToken string) (ImplResponse, error) {
-	return ErrorResponse(http.StatusNotImplemented, errors.New("FindMCPServers not implemented")), nil
-}
-
-func (m *ModelCatalogServiceAPIService) FindMCPServersFilterOptions(ctx context.Context) (ImplResponse, error) {
-	return ErrorResponse(http.StatusNotImplemented, errors.New("FindMCPServersFilterOptions not implemented")), nil
-}
-
-func (m *ModelCatalogServiceAPIService) GetMCPServer(ctx context.Context, serverID string) (ImplResponse, error) {
-	return ErrorResponse(http.StatusNotImplemented, errors.New("GetMCPServer not implemented")), nil
-}
-
-func (m *ModelCatalogServiceAPIService) FindMCPServerTools(ctx context.Context, serverID string, filterQuery string, pageSize string, orderBy model.OrderByField, sortOrder model.SortOrder, nextPageToken string) (ImplResponse, error) {
-	return ErrorResponse(http.StatusNotImplemented, errors.New("FindMCPServerTools not implemented")), nil
-}
-
-func (m *ModelCatalogServiceAPIService) GetMCPServerTool(ctx context.Context, serverID string, toolName string) (ImplResponse, error) {
-	return ErrorResponse(http.StatusNotImplemented, errors.New("GetMCPServerTool not implemented")), nil
-}
-
 func (m *ModelCatalogServiceAPIService) FindModels(ctx context.Context, recommended bool, targetRPS int32, latencyProperty string, rpsProperty string, hardwareCountProperty string, hardwareTypeProperty string, sourceIDs []string, q string, sourceLabels []string, filterQuery string, pageSize string, orderBy model.OrderByField, sortOrder model.SortOrder, nextPageToken string) (ImplResponse, error) {
 	// Validate pagination parameters
 	var err error
@@ -292,7 +274,7 @@ func (m *ModelCatalogServiceAPIService) FindModels(ctx context.Context, recommen
 			hardwareTypeProp = "hardware_type"
 		}
 
-		paretoParams := dbmodels.ParetoFilteringParams{
+		paretoParams := modelcatalog.ParetoFilteringParams{
 			TargetRPS:             targetRPSPtr,
 			LatencyProperty:       latencyProp,
 			RpsProperty:           rpsProp,
@@ -371,10 +353,18 @@ func (m *ModelCatalogServiceAPIService) GetModel(ctx context.Context, sourceID, 
 	return Response(http.StatusOK, model), nil
 }
 
-func (m *ModelCatalogServiceAPIService) FindSources(ctx context.Context, name string, strPageSize string, orderBy model.OrderByField, sortOrder model.SortOrder, nextPageToken string) (ImplResponse, error) {
+func (m *ModelCatalogServiceAPIService) FindSources(ctx context.Context, name string, assetType model.CatalogAssetType, strPageSize string, orderBy model.OrderByField, sortOrder model.SortOrder, nextPageToken string) (ImplResponse, error) {
+	// Collect all sources (model + MCP) as CatalogSource objects
 	sources := m.sources.All()
+
+	if m.mcpSources != nil {
+		for id, mcpSrc := range m.mcpSources.AllSources() {
+			sources[id] = mcpSourceToCatalogSource(mcpSrc)
+		}
+	}
+
 	if len(sources) > math.MaxInt32 {
-		err := errors.New("too many registered models")
+		err := errors.New("too many registered sources")
 		return ErrorResponse(http.StatusInternalServerError, err), err
 	}
 
@@ -394,12 +384,24 @@ func (m *ModelCatalogServiceAPIService) FindSources(ctx context.Context, name st
 		return ErrorResponse(http.StatusBadRequest, err), err
 	}
 
+	if assetType == "" {
+		assetType = model.CATALOGASSETTYPE_MODELS
+	}
+
 	items := make([]model.CatalogSource, 0, len(sources))
 
 	name = strings.ToLower(name)
 
 	for _, v := range sources {
 		if !strings.Contains(strings.ToLower(v.Name), name) {
+			continue
+		}
+
+		sourceAssetType := v.GetAssetType()
+		if !v.HasAssetType() {
+			sourceAssetType = model.CATALOGASSETTYPE_MODELS
+		}
+		if sourceAssetType != assetType {
 			continue
 		}
 
@@ -436,6 +438,20 @@ func (m *ModelCatalogServiceAPIService) FindSources(ctx context.Context, name st
 		NextPageToken: next.Token(),
 	}
 	return Response(http.StatusOK, res), nil
+}
+
+// mcpSourceToCatalogSource converts an internal MCPSource to the API CatalogSource type.
+func mcpSourceToCatalogSource(src basecatalog.MCPSource) model.CatalogSource {
+	cs := model.CatalogSource{
+		Id:      src.ID,
+		Name:    src.Name,
+		Enabled: src.Enabled,
+		Labels:  src.Labels,
+	}
+	if src.AssetType != nil {
+		cs.AssetType = src.AssetType
+	}
+	return cs
 }
 
 func (m *ModelCatalogServiceAPIService) PreviewCatalogSource(ctx context.Context, configParam *os.File, pageSizeParam string, nextPageTokenParam string, filterStatusParam string, catalogDataParam *os.File) (ImplResponse, error) {
@@ -654,10 +670,11 @@ func genLabelCmpFunc(orderByKey string, sortOrder model.SortOrder) func(sortable
 var _ ModelCatalogServiceAPIServicer = &ModelCatalogServiceAPIService{}
 
 // NewModelCatalogServiceAPIService creates a default api service
-func NewModelCatalogServiceAPIService(provider catalog.APIProvider, sources *catalog.SourceCollection, labels *catalog.LabelCollection, sourceRepository models.CatalogSourceRepository) ModelCatalogServiceAPIServicer {
+func NewModelCatalogServiceAPIService(provider catalog.APIProvider, sources *catalog.SourceCollection, mcpSources *catalog.MCPSourceCollection, labels *catalog.LabelCollection, sourceRepository models.CatalogSourceRepository) ModelCatalogServiceAPIServicer {
 	return &ModelCatalogServiceAPIService{
 		provider:         provider,
 		sources:          sources,
+		mcpSources:       mcpSources,
 		labels:           labels,
 		sourceRepository: sourceRepository,
 	}
