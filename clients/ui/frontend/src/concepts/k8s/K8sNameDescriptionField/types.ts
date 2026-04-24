@@ -24,6 +24,9 @@ export type K8sNameDescriptionType = {
   description?: string;
 };
 
+/** Max length for a DNS-1123 label; model transfer job resource names use this limit server-side. */
+export const MAX_MODEL_TRANSFER_JOB_RESOURCE_NAME_LENGTH = 63;
+
 export type UseK8sNameDescriptionDataConfiguration = {
   /** Seed the state with initial data */
   initialData?: K8sNameDescriptionType;

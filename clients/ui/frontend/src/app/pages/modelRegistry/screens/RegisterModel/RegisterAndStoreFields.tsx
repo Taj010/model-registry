@@ -8,7 +8,10 @@ import {
   translateDisplayNameForK8s,
   checkValidK8sName,
 } from '~/concepts/k8s/K8sNameDescriptionField/utils';
-import { K8sNameDescriptionFieldData } from '~/concepts/k8s/K8sNameDescriptionField/types';
+import {
+  K8sNameDescriptionFieldData,
+  MAX_MODEL_TRANSFER_JOB_RESOURCE_NAME_LENGTH,
+} from '~/concepts/k8s/K8sNameDescriptionField/types';
 import { RegistrationCommonFormData } from './useRegisterModelData';
 import RegistrationModelLocationFields from './RegistrationModelLocationFields';
 import RegistrationDestinationLocationFields from './RegistrationDestinationLocationFields';
@@ -51,8 +54,8 @@ const RegisterAndStoreFields = <D extends RegistrationCommonFormData>({
         state: {
           immutable: false,
           invalidCharacters: validation.invalidCharacters,
-          invalidLength: resourceName.length > 253,
-          maxLength: 253,
+          invalidLength: resourceName.length > MAX_MODEL_TRANSFER_JOB_RESOURCE_NAME_LENGTH,
+          maxLength: MAX_MODEL_TRANSFER_JOB_RESOURCE_NAME_LENGTH,
           touched: isTouched,
         },
       },
