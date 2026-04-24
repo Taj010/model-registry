@@ -1,3 +1,4 @@
+import { genRandomChars } from 'mod-arch-shared';
 import {
   K8sNameDescriptionFieldData,
   K8sNameDescriptionFieldUpdateFunctionInternal,
@@ -15,7 +16,14 @@ export const translateDisplayNameForK8s = (name = '', safePrefix = ''): string =
     .trim()
     .toLowerCase()
     .replace(/\s/g, '-')
-    .replace(/[^A-Za-z0-9-]/g, '');
+    .replace(/[^a-z0-9-]/g, '')
+    .replace(/^-*/, '')
+    .replace(/-*$/, '')
+    .replace(/[-]+/g, '-');
+
+  if (name.trim().length > 0 && translatedName.length === 0) {
+    return safePrefix ? `${safePrefix}${genRandomChars()}` : `gen-${genRandomChars()}`;
+  }
 
   if (safePrefix) {
     return `${safePrefix}${translatedName}`;
