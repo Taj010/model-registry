@@ -249,6 +249,7 @@ const RegisterCatalogModelForm: React.FC<RegisterCatalogModelFormProps> = ({
                 setData={setData}
                 hasModelNameError={hasModelNameError}
                 isModelNameDuplicate={isModelNameDuplicate}
+                isModelTypeRequired
                 isModelTypeReadOnly
               />
               <RegistrationCommonFormSections

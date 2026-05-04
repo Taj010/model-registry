@@ -234,7 +234,7 @@ export const isRegisterCatalogModelSubmitDisabled = (
     registeredModels,
     namespaceHasAccess,
     isNamespaceAccessLoading,
-    { requireModelType: false },
+    { requireModelType: true },
   ) || !formData.modelRegistry;
 
 export const isNameValid = (name: string): boolean => name.length <= MR_CHARACTER_LIMIT;
