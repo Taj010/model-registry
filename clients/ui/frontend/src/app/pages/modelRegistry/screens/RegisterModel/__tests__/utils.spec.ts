@@ -121,10 +121,28 @@ describe('RegisterModel utils', () => {
   });
 
   describe('isRegisterCatalogModelSubmitDisabled', () => {
-    it('allows submit without model type when registry is selected', () => {
+    it('disables submit without model type when registry is selected', () => {
       expect(
         isRegisterCatalogModelSubmitDisabled(
           { ...mrRegisterForm({}), modelRegistry: 'test-mr' },
+          emptyRegisteredModelList,
+        ),
+      ).toBe(true);
+    });
+
+    it('allows submit when registry and model type are set', () => {
+      expect(
+        isRegisterCatalogModelSubmitDisabled(
+          {
+            ...mrRegisterForm({
+              [CatalogModelCustomPropertyKey.MODEL_TYPE]: {
+                metadataType: ModelRegistryMetadataType.STRING,
+                // eslint-disable-next-line camelcase
+                string_value: ModelType.GENERATIVE,
+              },
+            }),
+            modelRegistry: 'test-mr',
+          },
           emptyRegisteredModelList,
         ),
       ).toBe(false);
